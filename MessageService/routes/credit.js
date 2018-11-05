@@ -14,7 +14,7 @@ const apiLimiter = rateLimit({
   router.post('/', apiLimiter, validator(), (req, res, next) => {
     let uuid = uuidv1();  
     let {amount} = req.body
-      dbService.addCredit(amount, uuid).then(credit =>{
+      dbService.addCredit(amount).then(credit =>{
           console.log("CREDIT ADDED", credit.amount)
           res.status(200).json({
             status: "200",

@@ -81,65 +81,78 @@ router.post('/', apiLimiter, validator(), (req, res, next) => {
     dbService.getCredit().then(credit =>{
       console.log("CREDIT:",  credit);
       if (credit.amount >= price) {
-        messageapp.post('/message', {destination, body})
-        .then(response => {
+        dbService.enqueue(uuid);
+        console.log("ENQUEUED", dbService.queue)
+        while ( dbService.qlength > 0 ) {
+          console.log("while", dbService.qlength);
+          uuid = dbService.lock(uuid);
 
-          dbService.payMessage(price)
-          .then(credit => {
-                console.log("Payment successful; credit:", credit)
-                status = "Confirmed";
-                tryMessageUpdate(status, uuid)
-                .then(message =>{
-                    console.log("POST succeeded: ", response.data);
-                    res.status(200).json({
-                    status: "200",
-                    data: response.data
-                    })
-                })
-                .catch(()=>{
-                    console.log("STORAGE ERROR")
-                    res.status(500).json({data: "STORAGE ERROR 1, TRY AGAIN"})
-                    return;
-                })
+          messageapp.post('/message', {destination, body})
+          .then(response => {
 
+            dbService.payMessage(price)
+            .then(credit => {
+                  console.log("Payment successful; credit:", credit)
+                  status = "Confirmed";
+                  dbService.unlock();
+                  dbService.qlength = dbService.queue.length;
+                  tryMessageUpdate(status, uuid)
+                  .then(message =>{
+                      console.log("POST succeeded: ", response.data);
+                      res.status(200).json({
+                      status: "200",
+                      data: response.data
+                      })
+                  })
+                  .catch(()=>{
+                      console.log("STORAGE ERROR")
+                      res.status(500).json({data: "STORAGE ERROR 1, TRY AGAIN"})
+                      return;
+                  })
+
+            })
+            .catch(err => {
+              console.log("PAYMENT ERROR")
+              dbService.unlock();
+              dbService.qlength = dbService.queue.length;
+              res.status(500).json({data: "PAYMENT ERROR, TRY AGAIN"})
+              return;
+            })
+            
           })
           .catch(err => {
-            console.log("PAYMENT ERROR")
-            res.status(500).json({data: "PAYMENT ERROR, TRY AGAIN"})
-            return;
+            dbService.unlock();
+            dbService.qlength = dbService.queue.length;
+            if (err.code && err.code === 'ECONNABORTED'){
+              status = "Not Confirmed"
+              tryMessageUpdate(status, uuid)
+              .then(message =>{
+                console.log(err, "TIMEOUT ERROR")
+                res.status(500).json({status: "INTERNAL SERVER ERROR: TIMEOUT"})
+                return;
+              })
+              .catch(()=>{
+                console.log("STORAGE ERROR")
+                res.status(500).json({data: "STORAGE ERROR 2, TRY AGAIN"})
+                return;
+              })
+        
+            } else {
+              status = "Failed";
+              tryMessageUpdate(status, uuid)
+              .then(message =>{
+                console.log(err, "INTERNAL SERVER ERROR")
+                res.status(500).json({status: "INTERNAL SERVER ERROR"})
+                return;
+              })
+              .catch(()=>{
+                console.log("STORAGE ERROR")
+                res.status(500).json({data: "STORAGE ERROR 3, TRY AGAIN"})
+                return;
+              })
+            }
           })
-          
-        })
-        .catch(err => {
-          if (err.code && err.code === 'ECONNABORTED'){
-            status = "Not Confirmed"
-            tryMessageUpdate(status, uuid)
-            .then(message =>{
-              console.log(err, "TIMEOUT ERROR")
-              res.status(500).json({status: "INTERNAL SERVER ERROR: TIMEOUT"})
-              return;
-            })
-            .catch(()=>{
-              console.log("STORAGE ERROR")
-              res.status(500).json({data: "STORAGE ERROR 2, TRY AGAIN"})
-              return;
-            })
-      
-          } else {
-            status = "Failed";
-            tryMessageUpdate(status, uuid)
-            .then(message =>{
-              console.log(err, "INTERNAL SERVER ERROR")
-              res.status(500).json({status: "INTERNAL SERVER ERROR"})
-              return;
-            })
-            .catch(()=>{
-              console.log("STORAGE ERROR")
-              res.status(500).json({data: "STORAGE ERROR 3, TRY AGAIN"})
-              return;
-            })
-          }
-        })
+        }
 
       } else {
         console.log("NO CREDIT")

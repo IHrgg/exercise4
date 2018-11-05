@@ -9,6 +9,9 @@ class _dbService {
     constructor(){
         this.DBURL = 'mongodb://mongodb:27017/messages';
         this.uuidWallet = uuidv1();
+        this.locked = false;
+        this.queue = [];
+        this.qlength = this.queue.length;
     }
 
     connect() {
@@ -36,8 +39,8 @@ class _dbService {
     createWallet(amount, uuid){
         return Credit.create({amount: amount, uuid: uuid})
     }
-    addCredit(amount, uuid){
-        return Credit.findOneAndUpdate({uuid: uuid}, { $inc: { amount: amount }}, {new:true})
+    addCredit(amount){
+        return Credit.findOneAndUpdate({uuid: this.uuidWallet}, { $inc: { amount: amount }}, {new:true})
     }
     payMessage(price){
         return Credit.findOneAndUpdate({uuid: this.uuidWallet}, { $inc: { amount: -price }}, {new:true})
@@ -47,6 +50,27 @@ class _dbService {
         return Credit.findOne()
     }
 
+    lock(uuid) {
+        if (this.locked == false ){
+            this.locked = true;
+            return uuid;
+        } else {
+            this.queue.unshift(uuid)
+            return this.queue.pop();
+        }
+    }
+    unlock() {
+        this.locked = false;
+        let uuid = this.queue.pop();
+        this.qlength = this.queue.length;
+        if (this.queue.length > 0){
+            this.lock(uuid);
+        }
+    }
+    enqueue(uuid) {
+        this.queue.unshift(uuid);
+        this.qlength = this.queue.length;
+    }
 
 }
 
