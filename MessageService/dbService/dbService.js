@@ -7,14 +7,15 @@ const connectCounter = 0;
 
 class _dbService {
     constructor(){
-        this.DBURL = 'mongodb://mongodb:27017/messages'  
+        this.DBURL = 'mongodb://mongodb:27017/messages';
+        this.uuidWallet = uuidv1();
     }
 
     connect() {
         mongoose.connect(this.DBURL, { useNewUrlParser: true})
         .then(x => {
             console.log(`Connected to Mongo. DB: "${x.connections[0].name}"`);
-            this.createWallet(5, uuidv1())
+            this.createWallet(5, this.uuidWallet)
         })
         .catch(err => {
             console.error("Error connecting to mongo", err);
@@ -38,8 +39,8 @@ class _dbService {
     addCredit(amount, uuid){
         return Credit.findOneAndUpdate({uuid: uuid}, { $inc: { amount: amount }}, {new:true})
     }
-    payMessage(price, uuid){
-        return Credit.findOneAndUpdate({uuid: uuid}, { $inc: { amount: -price }}, {new:true})
+    payMessage(price){
+        return Credit.findOneAndUpdate({uuid: this.uuidWallet}, { $inc: { amount: -price }}, {new:true})
     }
 
     getCredit() {

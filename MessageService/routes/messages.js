@@ -84,7 +84,7 @@ router.post('/', apiLimiter, validator(), (req, res, next) => {
         messageapp.post('/message', {destination, body})
         .then(response => {
 
-          dbService.payMessage(price, uuid)
+          dbService.payMessage(price)
           .then(credit => {
                 console.log("Payment successful; credit:", credit)
                 status = "Confirmed";
