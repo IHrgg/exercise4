@@ -10,6 +10,7 @@ let retryUpdateCounter = 0;
 const price = 1;
 const messageapp = axios.create({
   baseURL: 'http://messageapp:3000',
+  //baseURL: 'http://localhost:3000',
   timeout: 2500
 });
 
@@ -63,11 +64,14 @@ const tryMessageUpdate = (status, uuid) => {
     })
 }
 
-router.post('/', apiLimiter, validator(), (req, res, next) => {
 
-    let {destination, body} = req.body
-    let status = "Not Processed";
-    let uuid = uuidv1();
+router.post('/', apiLimiter, validator(), (req, res, next) => {
+  
+  let {destination, body} = req.body
+  let status = "Not Processed";
+  let uuid = uuidv1();
+  dbService.enqueue(uuid);
+  console.log("ENQUEUED", dbService.queue)
   
     tryMessageCreate(destination, body, status, uuid)
     .then((message)=>{
@@ -80,79 +84,79 @@ router.post('/', apiLimiter, validator(), (req, res, next) => {
 
     dbService.getCredit().then(credit =>{
       console.log("CREDIT:",  credit);
+
       if (credit.amount >= price) {
-        dbService.enqueue(uuid);
-        console.log("ENQUEUED", dbService.queue)
-        while ( dbService.qlength > 0 ) {
-          console.log("while", dbService.qlength);
-          uuid = dbService.lock(uuid);
-
-          messageapp.post('/message', {destination, body})
-          .then(response => {
-
-            dbService.payMessage(price)
-            .then(credit => {
-                  console.log("Payment successful; credit:", credit)
-                  status = "Confirmed";
-                  dbService.unlock();
-                  dbService.qlength = dbService.queue.length;
+        if ( dbService.queue.length > 0 && !dbService.lock) {
+          console.log("IF NO LOCK", dbService.lock, dbService.queue);
+          dbService.lock = true;
+            
+            messageapp.post('/message', {destination, body})
+            .then(response => {
+              
+              dbService.payMessage(price)
+              .then(credit => {
+                console.log("Payment successful; credit:", credit)
+                status = "Confirmed";
+                dbService.lock = false;
+                dbService.dequeue();
                   tryMessageUpdate(status, uuid)
                   .then(message =>{
-                      console.log("POST succeeded: ", response.data);
-                      res.status(200).json({
+                    console.log("POST succeeded: ", response.data);
+                    res.status(200).json({
                       status: "200",
                       data: response.data
-                      })
+                    })
                   })
                   .catch(()=>{
-                      console.log("STORAGE ERROR")
-                      res.status(500).json({data: "STORAGE ERROR 1, TRY AGAIN"})
-                      return;
+                    console.log("STORAGE ERROR")
+                    res.status(500).json({data: "STORAGE ERROR 1, TRY AGAIN"})
+                    return;
                   })
-
+                  
+              })
+              .catch(err => {
+                  console.log("PAYMENT ERROR")
+                  dbService.lock = false;
+                  dbService.dequeue();
+                  res.status(500).json({data: "PAYMENT ERROR, TRY AGAIN"})
+                  return;
+              })
+                  
             })
             .catch(err => {
-              console.log("PAYMENT ERROR")
-              dbService.unlock();
-              dbService.qlength = dbService.queue.length;
-              res.status(500).json({data: "PAYMENT ERROR, TRY AGAIN"})
-              return;
+                  dbService.lock = false;
+                  if (err.code && err.code === 'ECONNABORTED'){
+                    status = "Not Confirmed"
+                    tryMessageUpdate(status, uuid)
+                    .then(message =>{
+                      console.log(err, "TIMEOUT ERROR")
+                      res.status(500).json({status: "INTERNAL SERVER ERROR: TIMEOUT"})
+                      return;
+                    })
+                    .catch(()=>{
+                      console.log("STORAGE ERROR")
+                      res.status(500).json({data: "STORAGE ERROR 2, TRY AGAIN"})
+                      return;
+                    })
+                    
+                  } else {
+                    status = "Failed";
+                    tryMessageUpdate(status, uuid)
+                    .then(message =>{
+                      console.log(err, "INTERNAL SERVER ERROR")
+                      res.status(500).json({status: "INTERNAL SERVER ERROR"})
+                      return;
+                    })
+                    .catch(()=>{
+                      console.log("STORAGE ERROR")
+                      res.status(500).json({data: "STORAGE ERROR 3, TRY AGAIN"})
+                      return;
+                    })
+                  }
             })
-            
-          })
-          .catch(err => {
-            dbService.unlock();
-            dbService.qlength = dbService.queue.length;
-            if (err.code && err.code === 'ECONNABORTED'){
-              status = "Not Confirmed"
-              tryMessageUpdate(status, uuid)
-              .then(message =>{
-                console.log(err, "TIMEOUT ERROR")
-                res.status(500).json({status: "INTERNAL SERVER ERROR: TIMEOUT"})
-                return;
-              })
-              .catch(()=>{
-                console.log("STORAGE ERROR")
-                res.status(500).json({data: "STORAGE ERROR 2, TRY AGAIN"})
-                return;
-              })
-        
-            } else {
-              status = "Failed";
-              tryMessageUpdate(status, uuid)
-              .then(message =>{
-                console.log(err, "INTERNAL SERVER ERROR")
-                res.status(500).json({status: "INTERNAL SERVER ERROR"})
-                return;
-              })
-              .catch(()=>{
-                console.log("STORAGE ERROR")
-                res.status(500).json({data: "STORAGE ERROR 3, TRY AGAIN"})
-                return;
-              })
-            }
-          })
         }
+        //if (dbService.lock) console.log("DB LOCKED");
+
 
       } else {
         console.log("NO CREDIT")

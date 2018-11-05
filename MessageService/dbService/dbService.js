@@ -8,10 +8,11 @@ const connectCounter = 0;
 class _dbService {
     constructor(){
         this.DBURL = 'mongodb://mongodb:27017/messages';
+        //this.DBURL = 'mongodb://localhost:27017/messages';
         this.uuidWallet = uuidv1();
-        this.locked = false;
+        this.lock = false;
         this.queue = [];
-        this.qlength = this.queue.length;
+        //this.qlength = this.queue.length;
     }
 
     connect() {
@@ -47,29 +48,14 @@ class _dbService {
     }
 
     getCredit() {
-        return Credit.findOne()
+        return Credit.findOne({uuid: this.uuidWallet})
     }
 
-    lock(uuid) {
-        if (this.locked == false ){
-            this.locked = true;
-            return uuid;
-        } else {
-            this.queue.unshift(uuid)
-            return this.queue.pop();
-        }
-    }
-    unlock() {
-        this.locked = false;
-        let uuid = this.queue.pop();
-        this.qlength = this.queue.length;
-        if (this.queue.length > 0){
-            this.lock(uuid);
-        }
-    }
     enqueue(uuid) {
         this.queue.unshift(uuid);
-        this.qlength = this.queue.length;
+    }
+    dequeue() {
+        this.queue.pop();
     }
 
 }
