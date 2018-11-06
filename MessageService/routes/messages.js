@@ -9,8 +9,8 @@ let retryCounter = 0;
 let retryUpdateCounter = 0;
 const price = 1;
 const messageapp = axios.create({
-  baseURL: 'http://messageapp:3000',
-  //baseURL: 'http://localhost:3000',
+  //baseURL: 'http://messageapp:3000',
+  baseURL: 'http://localhost:3000',
   timeout: 2500
 });
 
@@ -64,6 +64,83 @@ const tryMessageUpdate = (status, uuid) => {
     })
 }
 
+const postMessage = (destination, body, uuid, status, res) => {
+  messageapp.post('/message', { destination, body })
+    .then(response => {
+
+      dbService.payMessage(price)
+        .then(credit => {
+          console.log("Payment successful; credit:", credit)
+          status = "Confirmed";
+          dbService.lock = false;
+          dbService.dequeue();
+          console.log("queue AFTER postMessge", dbService.queue)
+          tryMessageUpdate(status, uuid)
+            .then(message => {
+              console.log("POST succeeded: ", response.data);
+              res.status(200).json({
+                status: "200",
+                data: response.data
+              })
+            })
+            .catch(() => {
+              console.log("STORAGE ERROR")
+              res.status(500).json({ data: "STORAGE ERROR 1, TRY AGAIN" })
+              return;
+            })
+
+        })
+        .catch(err => {
+          console.log("PAYMENT ERROR")
+          dbService.lock = false;
+          dbService.dequeue();
+          console.log("queue AFTER postMessge", dbService.queue)
+          res.status(500).json({ data: "PAYMENT ERROR, TRY AGAIN" })
+          return;
+        })
+
+    })
+    .catch(err => {
+      dbService.lock = false;
+      dbService.dequeue();
+      console.log("queue AFTER postMessge", dbService.queue)
+      if (err.code && err.code === 'ECONNABORTED') {
+        status = "Not Confirmed"
+        tryMessageUpdate(status, uuid)
+          .then(message => {
+            console.log(err, "TIMEOUT ERROR")
+            res.status(500).json({ status: "INTERNAL SERVER ERROR: TIMEOUT" })
+            return;
+          })
+          .catch(() => {
+            console.log("STORAGE ERROR")
+            res.status(500).json({ data: "STORAGE ERROR 2, TRY AGAIN" })
+            return;
+          })
+
+      } else {
+        status = "Failed";
+        tryMessageUpdate(status, uuid)
+          .then(message => {
+            console.log(err, "INTERNAL SERVER ERROR")
+            res.status(500).json({ status: "INTERNAL SERVER ERROR" })
+            return;
+          })
+          .catch(() => {
+            console.log("STORAGE ERROR")
+            res.status(500).json({ data: "STORAGE ERROR 3, TRY AGAIN" })
+            return;
+          })
+      }
+    })
+
+
+}
+
+/* const checkQueue = () => {
+
+} */
+
 
 router.post('/', apiLimiter, validator(), (req, res, next) => {
   
@@ -90,70 +167,7 @@ router.post('/', apiLimiter, validator(), (req, res, next) => {
           console.log("IF NO LOCK", dbService.lock, dbService.queue);
           dbService.lock = true;
             
-            messageapp.post('/message', {destination, body})
-            .then(response => {
-              
-              dbService.payMessage(price)
-              .then(credit => {
-                console.log("Payment successful; credit:", credit)
-                status = "Confirmed";
-                dbService.lock = false;
-                dbService.dequeue();
-                  tryMessageUpdate(status, uuid)
-                  .then(message =>{
-                    console.log("POST succeeded: ", response.data);
-                    res.status(200).json({
-                      status: "200",
-                      data: response.data
-                    })
-                  })
-                  .catch(()=>{
-                    console.log("STORAGE ERROR")
-                    res.status(500).json({data: "STORAGE ERROR 1, TRY AGAIN"})
-                    return;
-                  })
-                  
-              })
-              .catch(err => {
-                  console.log("PAYMENT ERROR")
-                  dbService.lock = false;
-                  dbService.dequeue();
-                  res.status(500).json({data: "PAYMENT ERROR, TRY AGAIN"})
-                  return;
-              })
-                  
-            })
-            .catch(err => {
-                  dbService.lock = false;
-                  if (err.code && err.code === 'ECONNABORTED'){
-                    status = "Not Confirmed"
-                    tryMessageUpdate(status, uuid)
-                    .then(message =>{
-                      console.log(err, "TIMEOUT ERROR")
-                      res.status(500).json({status: "INTERNAL SERVER ERROR: TIMEOUT"})
-                      return;
-                    })
-                    .catch(()=>{
-                      console.log("STORAGE ERROR")
-                      res.status(500).json({data: "STORAGE ERROR 2, TRY AGAIN"})
-                      return;
-                    })
-                    
-                  } else {
-                    status = "Failed";
-                    tryMessageUpdate(status, uuid)
-                    .then(message =>{
-                      console.log(err, "INTERNAL SERVER ERROR")
-                      res.status(500).json({status: "INTERNAL SERVER ERROR"})
-                      return;
-                    })
-                    .catch(()=>{
-                      console.log("STORAGE ERROR")
-                      res.status(500).json({data: "STORAGE ERROR 3, TRY AGAIN"})
-                      return;
-                    })
-                  }
-            })
+          postMessage(destination, body, uuid, status, res)
         }
         //if (dbService.lock) console.log("DB LOCKED");
 

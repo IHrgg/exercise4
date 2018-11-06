@@ -19,6 +19,12 @@ class ClientService {
         .then(response => console.log("RESPONSE", response.data.data))
         .catch(e => console.log("ERROR", e.response.data.status))
     }
+
+    add_credit(amount) {
+        return this.service.post('/credit', {amount})
+        .then(response => console.log("RESPONSE", response.data.data))
+        .catch(e => console.log("ERROR", e.response.data.status))
+    }
 }
 
 module.exports = ClientService;

@@ -1,17 +1,26 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Message = require('./models/Message')
+//const Message2 = require('./models/Message2')
 const Credit = require('./models/Credit')
+//const Credit2 = require('./models/Credit2')
 const uuidv1 = require('uuid/v1');
 const connectCounter = 0;
 
 class _dbService {
     constructor(){
-        this.DBURL = 'mongodb://mongodb:27017/messages';
-        //this.DBURL = 'mongodb://localhost:27017/messages';
+        //this.DBURL = 'mongodb://mongodb:27017/messages';
+        this.DBURL = 'mongodb://localhost:27017/messages';
+        this.DBURL2 = 'mongodb://mongodb:27018/messages2';
+        //this.DBURL2 = 'mongodb://localhost:27018/messages2';
         this.uuidWallet = uuidv1();
+        //this.uuidWallet2 = uuidv1();
         this.lock = false;
+        this.lock2 = false;
         this.queue = [];
+        this.queue2 = [];
+        this.main = null;
+        this.replica = null;
         //this.qlength = this.queue.length;
     }
 
@@ -19,7 +28,10 @@ class _dbService {
         mongoose.connect(this.DBURL, { useNewUrlParser: true})
         .then(x => {
             console.log(`Connected to Mongo. DB: "${x.connections[0].name}"`);
+            this.main = {db: x.connections[0].name, Message: Message, Credit: Credit}
+            console.log(this.main)
             this.createWallet(5, this.uuidWallet)
+            
         })
         .catch(err => {
             console.error("Error connecting to mongo", err);
