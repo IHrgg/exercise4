@@ -6,7 +6,8 @@ const messageSchema = new Schema({
   body: String,
   opNumber: Number,
   status: String,
-  uuid: String
+  uuid: String,
+  counter: Number
 }, {
   timestamps: {
     createdAt: 'created_at',

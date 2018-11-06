@@ -19,16 +19,18 @@ class _dbService {
         this.lock2 = false;
         this.queue = [];
         this.queue2 = [];
-        this.main = null;
-        this.replica = null;
+        this.main = {db: null, op: 0, Message: null, Credit: null};
+        this.second = {db: null, op: 0, Message: null, Credit: null};
+        
         //this.qlength = this.queue.length;
     }
 
-    connect() {
-        mongoose.connect(this.DBURL, { useNewUrlParser: true})
+    connect(url) {
+        mongoose.connect(url, { useNewUrlParser: true})
         .then(x => {
             console.log(`Connected to Mongo. DB: "${x.connections[0].name}"`);
-            this.main = {db: x.connections[0].name, Message: Message, Credit: Credit}
+            if (main.db == null) this.main = {db: x.connections[0].name, Message: Message, Credit: Credit};
+            else this.main = {db: x.connections[0].name, Message: Message, Credit: Credit};
             console.log(this.main)
             this.createWallet(5, this.uuidWallet)
             

@@ -4,7 +4,8 @@ const Schema   = mongoose.Schema;
 const creditSchema = new Schema({
   amount: {type: Number, default: 0},
   lock: String,
-  uuid: String
+  uuid: String,
+  counter: Number
 }, {
   timestamps: {
     createdAt: 'created_at',
